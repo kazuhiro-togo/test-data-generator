@@ -1,0 +1,14 @@
+plugins {
+    id 'java'
+}
+
+group = 'io.github.kazuhiroTogo'
+version = '0.0.1-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.github.javafaker:javafaker:1.0.2'
+}
