@@ -1,4 +1,4 @@
-package io.github.kazuhiroTogo.testdatagenerator;
+package com.github.kazuhiroTogo.testdatagenerator;
 
 import com.github.javafaker.Faker;
 

@@ -1,4 +1,4 @@
-package io.github.kazuhiroTogo.testdatagenerator;
+package com.github.kazuhiroTogo.testdatagenerator;
 
 public enum ColumnType {
     UUID,
