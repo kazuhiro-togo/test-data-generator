@@ -23,14 +23,14 @@
 <dependency>
     <groupId>com.github.kazuhiro-togo</groupId>
     <artifactId>testdatagenerator</artifactId>
-    <version>v0.0.2</version>
+    <version>v0.0.4</version>
 </dependency>
 ```
 
 ### Gradleを使用する場合
 
 ```groovy
-implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.2'
+implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.4'
 ```
 
 ### 使い方
