@@ -2,8 +2,7 @@ package io.github.kazuhiroTogo.testdatagenerator;
 
 public enum OutputFormatType {
     TABLE,
+    TSV,
     CSV,
-    JSON,
     INSERT,
-    TAB
 }

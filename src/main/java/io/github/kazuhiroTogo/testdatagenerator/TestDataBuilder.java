@@ -2,7 +2,9 @@ package io.github.kazuhiroTogo.testdatagenerator;
 
 import com.github.javafaker.Faker;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -14,15 +16,13 @@ public class TestDataBuilder {
     private List<InsertConfig> insertConfigs = new ArrayList<>();
     private OutputFormatType outputFormat = OutputFormatType.TABLE; // Default format
     private Faker faker;
-    private SimpleDateFormat dateFormatter;
 
     private TestDataBuilder() {
         this.faker = new Faker(Locale.JAPAN);
-        this.dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
     }
 
     /**
-     * Creates a new builder instance with default Faker and DateFormatter.
+     * Creates a new builder instance with default Faker
      *
      * @return New builder instance.
      */
@@ -39,20 +39,6 @@ public class TestDataBuilder {
     public static TestDataBuilder newBuilder(Faker faker) {
         TestDataBuilder builder = new TestDataBuilder();
         builder.faker = faker;
-        return builder;
-    }
-
-    /**
-     * Creates a new builder instance with the specified Faker instance and DateFormatter.
-     *
-     * @param faker Faker instance to use.
-     * @param dateFormatter DateFormatter instance to use.
-     * @return New builder instance.
-     */
-    public static TestDataBuilder newBuilder(Faker faker, SimpleDateFormat dateFormatter) {
-        TestDataBuilder builder = new TestDataBuilder();
-        builder.faker = faker;
-        builder.dateFormatter = dateFormatter;
         return builder;
     }
 
@@ -92,17 +78,17 @@ public class TestDataBuilder {
      */
     public String build() {
         // Generate data based on insertConfigs
-        Map<String, List<Map<String, String>>> database = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> database = new LinkedHashMap<>();
 
         for (InsertConfig config : insertConfigs) {
-            List<Map<String, String>> table = database.computeIfAbsent(config.tableName, k -> new ArrayList<>());
+            List<Map<String, Object>> table = database.computeIfAbsent(config.tableName, k -> new ArrayList<>());
 
             if (config.references.isEmpty()) {
                 // No references; generate 'times' number of rows
                 for (int i = 0; i < config.times; i++) {
-                    Map<String, String> row = new LinkedHashMap<>();
+                    Map<String, Object> row = new LinkedHashMap<>();
                     for (Column column : config.columns) {
-                        String value = column.valueSupplier.get();
+                        Object value = column.valueSupplier.get();
                         row.put(column.name, value != null ? value : "NULL");
                     }
                     table.add(row);
@@ -118,21 +104,21 @@ public class TestDataBuilder {
                 }
 
                 String refTable = refTables.iterator().next();
-                List<Map<String, String>> refTableData = database.get(refTable);
+                List<Map<String, Object>> refTableData = database.get(refTable);
                 if (refTableData == null || refTableData.isEmpty()) {
                     throw new IllegalStateException("Reference table '" + refTable + "' has no data.");
                 }
 
-                for (Map<String, String> refRow : refTableData) {
+                for (Map<String, Object> refRow : refTableData) {
                     for (int i = 0; i < config.times; i++) {
-                        Map<String, String> row = new LinkedHashMap<>();
+                        Map<String, Object> row = new LinkedHashMap<>();
                         // Set all reference columns
                         for (Reference ref : config.references) {
                             row.put(ref.targetColumn, refRow.get(ref.refColumn));
                         }
                         // Set other columns
                         for (Column column : config.columns) {
-                            String value = column.valueSupplier.get();
+                            Object value = column.valueSupplier.get();
                             row.put(column.name, value != null ? value : "NULL");
                         }
                         table.add(row);
@@ -145,12 +131,10 @@ public class TestDataBuilder {
         switch (outputFormat) {
             case TABLE:
                 return generatePipeTableOutput(database);
-            case TAB:
-                return generateTabTableOutput(database);
+            case TSV:
+                return generateTsvOutput(database);
             case CSV:
                 return generateCsvOutput(database);
-            case JSON:
-                return generateJsonOutput(database);
             case INSERT:
                 return generateInsertOutput(database);
             default:
@@ -164,11 +148,11 @@ public class TestDataBuilder {
      * @param database Map of table names to their data.
      * @return Pipe-separated table formatted string.
      */
-    private String generatePipeTableOutput(Map<String, List<Map<String, String>>> database) {
+    private String generatePipeTableOutput(Map<String, List<Map<String, Object>>> database) {
         StringBuilder sb = new StringBuilder();
         for (String tableName : database.keySet()) {
             sb.append("Table: ").append(tableName).append("\n");
-            List<Map<String, String>> rows = database.get(tableName);
+            List<Map<String, Object>> rows = database.get(tableName);
             if (rows.isEmpty()) {
                 sb.append("(No data)\n\n");
                 continue;
@@ -176,22 +160,22 @@ public class TestDataBuilder {
 
             // Get all column names
             Set<String> columns = new LinkedHashSet<>();
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 columns.addAll(row.keySet());
             }
 
             // Header
-            sb.append(String.join(" | ", columns)).append("\n");
+            sb.append("| ").append(String.join(" | ", columns)).append(" |\n");
 
             // Separator
-            sb.append(columns.stream().map(col -> "---").collect(Collectors.joining(" | "))).append("\n");
+            sb.append("| ").append(columns.stream().map(col -> "---").collect(Collectors.joining(" | "))).append(" |\n");
 
             // Rows
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 List<String> values = columns.stream()
-                        .map(col -> row.getOrDefault(col, "NULL"))
+                        .map(col -> formatValue(row.getOrDefault(col, "NULL")))
                         .collect(Collectors.toList());
-                sb.append(String.join(" | ", values)).append("\n");
+                sb.append("| ").append(String.join(" | ", values)).append(" |\n");
             }
             sb.append("\n");
         }
@@ -204,11 +188,11 @@ public class TestDataBuilder {
      * @param database Map of table names to their data.
      * @return Tab-separated table formatted string.
      */
-    private String generateTabTableOutput(Map<String, List<Map<String, String>>> database) {
+    private String generateTsvOutput(Map<String, List<Map<String, Object>>> database) {
         StringBuilder sb = new StringBuilder();
         for (String tableName : database.keySet()) {
             sb.append("Table: ").append(tableName).append("\n");
-            List<Map<String, String>> rows = database.get(tableName);
+            List<Map<String, Object>> rows = database.get(tableName);
             if (rows.isEmpty()) {
                 sb.append("(No data)\n\n");
                 continue;
@@ -216,20 +200,17 @@ public class TestDataBuilder {
 
             // Get all column names
             Set<String> columns = new LinkedHashSet<>();
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 columns.addAll(row.keySet());
             }
 
             // Header
             sb.append(String.join("\t", columns)).append("\n");
 
-            // Separator
-            sb.append(columns.stream().map(col -> "----").collect(Collectors.joining("\t"))).append("\n");
-
             // Rows
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 List<String> values = columns.stream()
-                        .map(col -> row.getOrDefault(col, "NULL"))
+                        .map(col -> formatValue(row.getOrDefault(col, "NULL")))
                         .collect(Collectors.toList());
                 sb.append(String.join("\t", values)).append("\n");
             }
@@ -244,11 +225,11 @@ public class TestDataBuilder {
      * @param database Map of table names to their data.
      * @return CSV formatted string.
      */
-    private String generateCsvOutput(Map<String, List<Map<String, String>>> database) {
+    private String generateCsvOutput(Map<String, List<Map<String, Object>>> database) {
         StringBuilder sb = new StringBuilder();
         for (String tableName : database.keySet()) {
             sb.append("Table: ").append(tableName).append("\n");
-            List<Map<String, String>> rows = database.get(tableName);
+            List<Map<String, Object>> rows = database.get(tableName);
             if (rows.isEmpty()) {
                 sb.append("(No data)\n\n");
                 continue;
@@ -256,7 +237,7 @@ public class TestDataBuilder {
 
             // Get all column names
             Set<String> columns = new LinkedHashSet<>();
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 columns.addAll(row.keySet());
             }
 
@@ -264,9 +245,9 @@ public class TestDataBuilder {
             sb.append(String.join(",", columns)).append("\n");
 
             // Rows
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 List<String> values = columns.stream()
-                        .map(col -> escapeCsv(row.getOrDefault(col, "NULL")))
+                        .map(col -> escapeCsv(formatValue(row.getOrDefault(col, "NULL"))))
                         .collect(Collectors.toList());
                 sb.append(String.join(",", values)).append("\n");
             }
@@ -293,91 +274,27 @@ public class TestDataBuilder {
     }
 
     /**
-     * Generates a JSON formatted string output.
-     *
-     * @param database Map of table names to their data.
-     * @return JSON formatted string.
-     */
-    private String generateJsonOutput(Map<String, List<Map<String, String>>> database) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\n");
-        int tableCount = 0;
-        int totalTables = database.size();
-        for (String tableName : database.keySet()) {
-            sb.append("  \"").append(tableName).append("\": [\n");
-            List<Map<String, String>> rows = database.get(tableName);
-            int rowCount = 0;
-            int totalRows = rows.size();
-            for (Map<String, String> row : rows) {
-                sb.append("    {\n");
-                int colCount = 0;
-                int totalCols = row.size();
-                for (Map.Entry<String, String> entry : row.entrySet()) {
-                    sb.append("      \"").append(entry.getKey()).append("\": ");
-                    if (entry.getValue() == null) {
-                        sb.append("null");
-                    } else {
-                        sb.append("\"").append(escapeJson(entry.getValue())).append("\"");
-                    }
-                    if (++colCount < totalCols) {
-                        sb.append(",");
-                    }
-                    sb.append("\n");
-                }
-                sb.append("    }");
-                if (++rowCount < totalRows) {
-                    sb.append(",");
-                }
-                sb.append("\n");
-            }
-            sb.append("  ]");
-            if (++tableCount < totalTables) {
-                sb.append(",");
-            }
-            sb.append("\n");
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-
-    /**
-     * Escapes JSON special characters in a string.
-     *
-     * @param value The JSON field value.
-     * @return Escaped JSON field value.
-     */
-    private String escapeJson(String value) {
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    /**
      * Generates SQL INSERT statements as a string output.
      *
      * @param database Map of table names to their data.
      * @return SQL INSERT statements.
      */
-    private String generateInsertOutput(Map<String, List<Map<String, String>>> database) {
+    private String generateInsertOutput(Map<String, List<Map<String, Object>>> database) {
         StringBuilder sb = new StringBuilder();
         for (String tableName : database.keySet()) {
-            List<Map<String, String>> rows = database.get(tableName);
+            List<Map<String, Object>> rows = database.get(tableName);
             if (rows.isEmpty()) {
                 continue;
             }
 
             // Get all column names
             Set<String> columns = new LinkedHashSet<>();
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 columns.addAll(row.keySet());
             }
 
             // Generate INSERT statements
-            for (Map<String, String> row : rows) {
+            for (Map<String, Object> row : rows) {
                 sb.append("INSERT INTO ").append(tableName).append(" (");
                 sb.append(String.join(", ", columns));
                 sb.append(") VALUES (");
@@ -398,46 +315,68 @@ public class TestDataBuilder {
      * @param value The value to format.
      * @return Formatted SQL value.
      */
-    private String formatSqlValue(String value) {
-        if (value == null) {
+    private String formatSqlValue(Object value) {
+        if (value == null || "NULL".equals(value)) {
             return "NULL";
         }
-        // Check if the value is a valid UUID or date, or else treat it as a string
-        if (isValidUUID(value) || isValidDate(value)) {
-            return "'" + value + "'";
+        if (value instanceof LocalDate || value instanceof LocalDateTime || value instanceof UUID) {
+            return "'" + value.toString() + "'";
+        }
+        if (value instanceof Number) {
+            return value.toString();
         }
         // Escape single quotes in strings
-        String escaped = value.replace("'", "''");
+        String escaped = value.toString().replace("'", "''");
         return "'" + escaped + "'";
     }
 
     /**
-     * Validates if a string is a valid UUID.
+     * Formats a value based on its type.
      *
-     * @param value The string to validate.
-     * @return True if valid UUID, else false.
+     * @param value The value to format.
+     * @return Formatted string representation of the value.
      */
-    private boolean isValidUUID(String value) {
-        try {
-            UUID.fromString(value);
-            return true;
-        } catch (Exception e) {
-            return false;
+    private String formatValue(Object value) {
+        if (value == null || "NULL".equals(value)) {
+            return "NULL";
         }
+        if (value instanceof LocalDate) {
+            return ((LocalDate) value).toString(); // "yyyy-MM-dd"
+        }
+        if (value instanceof LocalDateTime) {
+            return ((LocalDateTime) value).toString(); // "yyyy-MM-ddTHH:mm:ss"
+        }
+        return value.toString();
     }
 
     /**
-     * Validates if a string is a valid date in the specified format.
+     * Escapes JSON special characters in a string.
      *
-     * @param value The string to validate.
-     * @return True if valid date, else false.
+     * @param value The JSON field value.
+     * @return Escaped JSON field value.
      */
-    private boolean isValidDate(String value) {
-        try {
-            dateFormatter.parse(value);
-            return true;
-        } catch (Exception e) {
-            return false;
+    private String escapeJson(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
+    /**
+     * Helper class to store column information.
+     */
+    private static class Column {
+        String name;
+        Supplier<Object> valueSupplier;
+        Class<?> type;
+
+        Column(String name, Supplier<Object> valueSupplier, Class<?> type) {
+            this.name = name;
+            this.valueSupplier = valueSupplier;
+            this.type = type;
         }
     }
 
@@ -454,44 +393,46 @@ public class TestDataBuilder {
         }
 
         /**
-         * Adds a column with a specified ColumnValueType.
+         * Adds a column with a specified ColumnType.
          *
          * @param columnName Name of the column.
          * @param valueType  Type of value to generate.
          * @return Builder instance for chaining.
          */
-        public InsertIntoBuilder column(String columnName, ColumnValueType valueType) {
-            Supplier<String> supplier = mapColumnValueType(valueType);
-            currentConfig.columns.add(new Column(columnName, supplier));
+        public InsertIntoBuilder column(String columnName, ColumnType valueType) {
+            Supplier<Object> supplier = mapColumnType(valueType);
+            Class<?> type = mapColumnTypeToClass(valueType);
+            currentConfig.columns.add(new Column(columnName, supplier, type));
+            return this;
+        }
+
+        public <T> InsertIntoBuilder column(String columnName, T value, Class<?> type) {
+            currentConfig.columns.add(new Column(columnName, () -> value, type));
             return this;
         }
 
         /**
-         * Adds a column with a custom Supplier<String>.
+         * Adds a column with a custom Supplier.
          *
          * @param columnName    Name of the column.
          * @param valueSupplier Supplier to generate the column value.
+         * @param type          Class type of the value.
          * @return Builder instance for chaining.
          */
-        public InsertIntoBuilder column(String columnName, Supplier<String> valueSupplier) {
-            if (valueSupplier == null) {
-                throw new IllegalArgumentException("ValueSupplier cannot be null.");
+        public InsertIntoBuilder column(String columnName, Supplier<?> valueSupplier, Class<?> type) {
+            if (valueSupplier == null || type == null) {
+                throw new IllegalArgumentException("ValueSupplier and type cannot be null.");
             }
-            currentConfig.columns.add(new Column(columnName, valueSupplier));
+            currentConfig.columns.add(new Column(columnName, () -> valueSupplier.get(), type));
             return this;
         }
 
-        /**
-         * Adds a column with a fixed value.
-         *
-         * @param columnName Name of the column.
-         * @param value      Fixed value to set.
-         * @return Builder instance for chaining.
-         */
-        public InsertIntoBuilder column(String columnName, String value) {
-            Supplier<String> supplier = () -> value;
-            currentConfig.columns.add(new Column(columnName, supplier));
-            return this;
+        public <T> InsertIntoBuilder column(String columnName, T value) {
+            return column(columnName, value, value.getClass());
+        }
+
+        public <T> InsertIntoBuilder column(String columnName, Supplier<T> value) {
+            return column(columnName, value, value.getClass());
         }
 
         /**
@@ -522,53 +463,63 @@ public class TestDataBuilder {
         }
 
         /**
-         * Maps ColumnValueType to corresponding Supplier<String>.
+         * Maps ColumnType to corresponding Supplier and Class type.
          *
          * @param type Type of column value.
          * @return Supplier for generating the value.
          */
-        private Supplier<String> mapColumnValueType(ColumnValueType type) {
+        private Supplier<Object> mapColumnType(ColumnType type) {
             switch (type) {
                 case UUID:
                     return () -> UUID.randomUUID().toString();
-                case FULL_NAME:
+                case STRING:
                     return () -> faker.name().fullName();
-                case TITLE:
-                    return () -> faker.book().title();
                 case DATE:
-                    return () -> dateFormatter.format(faker.date().birthday());
+                    return () -> faker.date().birthday().toInstant()
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate();
+                case DATETIME:
+                    return () -> faker.date().birthday().toInstant()
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDateTime();
+                case BOOLEAN:
+                    return () -> faker.bool().bool();
+                case INT:
+                    return () -> faker.number().numberBetween(1, 100);
+                case DOUBLE:
+                    return () -> faker.number().randomDouble(2, 1, 100);
                 case NULL:
                     return () -> null;
                 default:
-                    throw new IllegalArgumentException("Unsupported ColumnValueType: " + type);
+                    throw new IllegalArgumentException("Unsupported ColumnType: " + type);
             }
         }
-    }
 
-    /**
-     * Helper class to store insert configurations.
-     */
-    private static class InsertConfig {
-        String tableName;
-        List<Column> columns = new ArrayList<>();
-        List<Reference> references = new ArrayList<>();
-        int times = 1;
-
-        InsertConfig(String tableName) {
-            this.tableName = tableName;
-        }
-    }
-
-    /**
-     * Helper class to store column information.
-     */
-    private static class Column {
-        String name;
-        Supplier<String> valueSupplier;
-
-        Column(String name, Supplier<String> valueSupplier) {
-            this.name = name;
-            this.valueSupplier = valueSupplier;
+        /**
+         * Maps ColumnType to corresponding Class type.
+         *
+         * @param type Type of column value.
+         * @return Class representing the type.
+         */
+        private Class<?> mapColumnTypeToClass(ColumnType type) {
+            switch (type) {
+                case UUID:
+                    return String.class;
+                case STRING:
+                    return String.class;
+                case INT:
+                    return Integer.class;
+                case DOUBLE:
+                    return Double.class;
+                case DATE:
+                    return LocalDate.class;
+                case DATETIME:
+                    return LocalDateTime.class;
+                case NULL:
+                    return Object.class;
+                default:
+                    throw new IllegalArgumentException("Unsupported ColumnType: " + type);
+            }
         }
     }
 
@@ -584,6 +535,20 @@ public class TestDataBuilder {
             this.refTable = refTable;
             this.refColumn = refColumn;
             this.targetColumn = targetColumn;
+        }
+    }
+
+    /**
+     * Helper class to store insert configurations.
+     */
+    private static class InsertConfig {
+        String tableName;
+        List<Column> columns = new ArrayList<>();
+        List<Reference> references = new ArrayList<>();
+        int times = 1;
+
+        InsertConfig(String tableName) {
+            this.tableName = tableName;
         }
     }
 }
