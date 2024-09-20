@@ -21,16 +21,16 @@
 
 ```xml
 <dependency>
-    <groupId>io.github.kazuhiroTogo</groupId>
+    <groupId>com.github.kazuhiro-togo</groupId>
     <artifactId>testdatagenerator</artifactId>
-    <version>0.0.1</version>
+    <version>v0.0.2</version>
 </dependency>
 ```
 
 ### Gradleを使用する場合
 
 ```groovy
-implementation 'io.github.kazuhiroTogo:testdatagenerator:0.0.1'
+implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.2'
 ```
 
 ### 使い方
