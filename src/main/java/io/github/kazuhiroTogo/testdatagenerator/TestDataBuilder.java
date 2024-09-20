@@ -350,22 +350,6 @@ public class TestDataBuilder {
     }
 
     /**
-     * Escapes JSON special characters in a string.
-     *
-     * @param value The JSON field value.
-     * @return Escaped JSON field value.
-     */
-    private String escapeJson(String value) {
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    /**
      * Helper class to store column information.
      */
     private static class Column {
@@ -423,7 +407,7 @@ public class TestDataBuilder {
             if (valueSupplier == null || type == null) {
                 throw new IllegalArgumentException("ValueSupplier and type cannot be null.");
             }
-            currentConfig.columns.add(new Column(columnName, () -> valueSupplier.get(), type));
+            currentConfig.columns.add(new Column(columnName, valueSupplier::get, type));
             return this;
         }
 

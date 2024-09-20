@@ -38,33 +38,38 @@ implementation 'io.github.kazuhiroTogo:testdatagenerator:0.0.1'
 ```java
 import com.github.javafaker.Faker;
 
-import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
+import java.time.LocalDate;
+import java.util.Random;
 
 public class Main {
     public static void main(String[] args) {
-        var builder = TestDataBuilder.newBuilder()
+        Faker faker = new Faker(Locale.JAPAN, new Random(1234L));
+        var builder = TestDataBuilder.newBuilder(faker)
                 .insertInto("Singers")
-                .column("SingerId", ColumnValueType.UUID)
-                .column("SingerName", ColumnValueType.FULL_NAME)
+                .column("SingerId", ColumnType.UUID)
+                .column("SingerName", ColumnType.STRING)
                 .times(2)
                 .insertInto("Singers")
-                .column("SingerId", ColumnValueType.UUID)
-                .column("SingerName", ColumnValueType.NULL)
+                .column("SingerId", ColumnType.UUID)
+                .column("SingerName", ColumnType.NULL)
                 .times(1)
+
                 .insertInto("Albums")
                 .ref("Singers", "SingerId", "SingerId")
-                .column("AlbumId", ColumnValueType.UUID)
-                .column("Title", ColumnValueType.TITLE)
-                .column("ReleaseDate", ColumnValueType.DATE)
+                .column("AlbumId", ColumnType.UUID)
+                .column("Title", () -> faker.book().title())
+                .column("ReleaseDate", ColumnType.DATE)
                 .times(2)
+
                 .insertInto("Songs")
                 .ref("Albums", "SingerId", "SingerId")
                 .ref("Albums", "AlbumId", "AlbumId")
-                .column("TrackId", ColumnValueType.UUID)
-                .column("SongName", ColumnValueType.TITLE)
+                .column("TrackId", ColumnType.UUID)
+                .column("SongName", () -> faker.file().fileName())
                 .times(2)
+
                 .insertInto("ActiveSongs")
                 .ref("Songs", "SingerId", "SingerId")
                 .ref("Songs", "AlbumId", "AlbumId")
@@ -76,9 +81,9 @@ public class Main {
         System.out.println("=== TABLE Format (| Delimited) ===");
         System.out.println(tableResult);
 
-        // 例2: TABフォーマットでタブ区切り
-        var tabResult = builder.outputFormat(OutputFormatType.TAB).build();
-        System.out.println("=== TAB Format (Tab Delimited) ===");
+        // 例2: TSVフォーマットでタブ区切り
+        var tabResult = builder.outputFormat(OutputFormatType.TSV).build();
+        System.out.println("=== TSV Format (Tab Delimited) ===");
         System.out.println(tabResult);
 
         // 例3: CSVフォーマットで出力
@@ -86,24 +91,21 @@ public class Main {
         System.out.println("=== CSV Format ===");
         System.out.println(csvResult);
 
-        // 例4: JSONフォーマットで出力
-        var jsonResult = builder.outputFormat(OutputFormatType.JSON).build();
-        System.out.println("=== JSON Format ===");
-        System.out.println(jsonResult);
-
-        // 例5: INSERTフォーマットで出力
+        // 例4: INSERTフォーマットで出力
         var insertResult = builder.outputFormat(OutputFormatType.INSERT).build();
         System.out.println("=== INSERT Format ===");
         System.out.println(insertResult);
 
-        // 例6: カスタムSupplierを使用してTitleを生成
-        Faker faker = new Faker(Locale.US);
-        var dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
+        // 例5: カスタムSupplierを使用して生成
+        Faker fakerUS = new Faker(Locale.US);
         String customSupplierResult =
-                TestDataBuilder.newBuilder()
+                TestDataBuilder.newBuilder(fakerUS)
                         .insertInto("CustomTable")
                         .column("CustomTitle", () -> "固定タイトル-" + faker.book().title())
-                        .column("CustomDate", () -> dateFormatter.format(faker.date().past(10, TimeUnit.DAYS)))
+                        .column("CustomDate", () -> LocalDate.now().plusDays(faker.number().numberBetween(1, 100)))
+                        .column("CustomDateTime", () -> LocalDateTime.now().plusDays(faker.number().numberBetween(1, 100)))
+                        .column("CustomDouble", () -> faker.number().randomDouble(2, 1, 100))
+                        .column("CustomInt", () -> faker.number().numberBetween(1, 100))
                         .times(3)
                         .outputFormat(OutputFormatType.INSERT)
                         .build();
@@ -112,4 +114,12 @@ public class Main {
         System.out.println(customSupplierResult);
     }
 }
+```
+
+INSERTフォーマットで出力例
+```sql
+=== INSERT Format ===
+INSERT INTO Singers (SingerId, SingerName) VALUES ('15810360-7125-4ea6-be7a-357200db81b6', '森 健');
+INSERT INTO Singers (SingerId, SingerName) VALUES ('208cf6b6-ebf4-4978-bed0-ef27bd59f51f', '西村 優那');
+INSERT INTO Singers (SingerId, SingerName) VALUES ('cea18fce-f5ce-465a-9331-d2ec0aa4d094', NULL);
 ```
