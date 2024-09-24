@@ -48,6 +48,7 @@ implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.4'
 ### 使い方
 
 ```java
+import com.github.kazuhiroTogo.testdatagenerator.*;
 import com.github.javafaker.Faker;
 
 import java.time.LocalDateTime;
