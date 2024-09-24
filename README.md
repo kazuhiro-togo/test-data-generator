@@ -20,6 +20,13 @@
 ### Mavenを使用する場合
 
 ```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
 <dependency>
     <groupId>com.github.kazuhiro-togo</groupId>
     <artifactId>testdatagenerator</artifactId>
@@ -30,6 +37,11 @@
 ### Gradleを使用する場合
 
 ```groovy
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
 implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.4'
 ```
 
