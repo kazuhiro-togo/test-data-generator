@@ -42,7 +42,9 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 
-implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.4'
+dependencies {
+    implementation 'com.github.kazuhiro-togo:test-data-generator:v0.0.4'
+}
 ```
 
 ### 使い方
